@@ -76,7 +76,7 @@ def L1TGlobalDigisSummary(process):
 def L1TGlobalMenuXML(process):
     process.load('L1Trigger.L1TGlobal.StableParameters_cff')
     process.load('L1Trigger.L1TGlobal.TriggerMenu_cff')
-    process.TriggerMenu.L1TriggerMenuFile = cms.string('L1Menu_Collisions2015_25nsStage1_v7_uGT.xml')    
+    process.TriggerMenu.L1TriggerMenuFile = cms.string('L1Menu_Collisions2016_v2c.xml')    
     return process
 
 def L1TGlobalSimDigisSummary(process):
@@ -132,4 +132,12 @@ def L1TStage2ComparisonRAWvsEMU(process):
     process.load('L1Trigger.L1TCommon.l1tComparisonStage2RAWvsEMU_cfi')
     process.l1tstage2comparison = cms.Path(process.l1tComparisonStage2RAWvsEMU)
     process.schedule.append(process.l1tstage2comparison)
+    return process
+
+
+def L1TGtStage2ComparisonRAWvsEMU(process):
+    print "L1T INFO:  will dump a comparison of unpacked vs emulated GT Stage2 content to screen."    
+    process.load('L1Trigger.L1TCommon.l1tComparisonGtStage2RAWvsEMU_cfi')
+    process.l1tgtstage2comparison = cms.Path(process.l1tComparisonGtStage2RAWvsEMU)
+    process.schedule.append(process.l1tgtstage2comparison)
     return process

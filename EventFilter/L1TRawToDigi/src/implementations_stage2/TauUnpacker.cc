@@ -61,6 +61,8 @@ namespace stage2 {
        
          tau.setHwPt(raw_data & 0x1FF);
 
+	 if (tau.hwPt()==0) continue;
+
 	 int abs_eta = (raw_data >> 9) & 0x7F;
          if ((raw_data >> 16) & 0x1) {
            tau.setHwEta(-1*(128-abs_eta));
@@ -69,8 +71,9 @@ namespace stage2 {
          }
 
          tau.setHwPhi((raw_data >> 17) & 0xFF);
-         tau.setHwIso((raw_data >> 25) & 0x1); // Assume one bit for now?
-         tau.setHwQual((raw_data >> 26) & 0x7); // Assume 3 bits for now? leaves 3 spare bits
+         tau.setHwIso((raw_data >> 25) & 0x3); // 2 bits
+         tau.setHwQual((raw_data >> 27) & 0x7); // Assume 3 bits for now? leaves 3 spare bits
+         // tau.setHwQual((raw_data >> 26) & 0x7); // Assume 3 bits for now? leaves 3 spare bits
 
          LogDebug("L1T") << "Tau: eta " << tau.hwEta() << " phi " << tau.hwPhi() << " pT " << tau.hwPt() << " iso " << tau.hwIso() << " qual " << tau.hwQual();
 
