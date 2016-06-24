@@ -32,18 +32,6 @@
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 
-#include "CondFormats/L1TObjects/interface/CaloParams.h"
-#include "CondFormats/DataRecord/interface/L1TCaloParamsRcd.h"
-
-#include "DataFormats/L1TCalorimeter/interface/CaloTower.h"
-#include "L1Trigger/L1TCalorimeter/interface/CaloTools.h"
-
-
-// #include "FWCore/Framework/interface/Frameworkfwd.h"
-// #include "FWCore/Framework/interface/stream/EDProducer.h"
-// #include "FWCore/Framework/interface/Event.h"
-// #include "FWCore/Framework/interface/MakerMacros.h"
-// #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Utilities/interface/InputTag.h"
 
 #include "DataFormats/FEDRawData/interface/FEDHeader.h"
@@ -54,7 +42,7 @@
 #include "EventFilter/L1TRawToDigi/interface/AMC13Spec.h"
 #include "EventFilter/L1TRawToDigi/interface/Block.h"
 
-
+#include <EventFilter/FEDInterface/interface/FED1024.h>
 
 #include <fstream>
 #include <iostream>
@@ -196,6 +184,10 @@ MP7RawToPatternWriter::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      return;
   }
 
+
+  const FEDRawData& tcdsRcd = feds->FEDData(1024);
+  evf::evtn::TCDSRecord record((unsigned char *)tcdsRcd.data());
+
   for (const auto& fedId: fedIds_) {
     const FEDRawData& l1tRcd = feds->FEDData(fedId);
     LogDebug("L1T") << "Found FEDRawDataCollection with ID " << fedId << " and size " << l1tRcd.size();
@@ -265,10 +257,15 @@ MP7RawToPatternWriter::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     std::ostringstream msg;
     msg << "--------------------" << std::endl;
     msg << "Event: "
+      << " ID " << iEvent.id().event() << ", " 
       << " LumiBlock " << iEvent.luminosityBlock() << ", "
       << " BX " << iEvent.bunchCrossing() << ", "
       << " Orbit " << iEvent. orbitNumber() << std::endl;
     msg << "--------------------" << std::endl;
+    msg << "TCDS Header:"
+      << " Trigger counts " << record.getHeader().getData().header.triggerCount << ", "
+      << " Number " << record.getHeader().getData().header.eventNumber << ", "
+      << std::endl;
     msg << "Slink Header:"
       << " Trigger type " << header.triggerType() << ", "
       << " L1 event ID " << header.lvl1ID() << ", "
@@ -283,9 +280,12 @@ MP7RawToPatternWriter::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       << " Size = " << packet.size() 
       << " No amcs: " << payload.size() << std::endl;
 
-    ios::fmtflags flgs( msg.flags() );
+    std::ios::fmtflags flgs( msg.flags() );
 
     bool anyMPFat = false;
+    bool l1IdFat = (header.lvl1ID()%107==0);
+    bool tcFat =   (record.getHeader().getData().header.triggerCount%107==0);
+    // bool evIdFat = (iEvent.id().event()%107==0);
 
     for ( const amc::Packet& pkt : payload) {
       msg.flags( flgs );
@@ -296,131 +296,28 @@ MP7RawToPatternWriter::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       msg << "L1ID " << amcHdr.getLV1ID() << ", "
         << "BX " << amcHdr.getBX() << ", "
         << "UserData " << std::hex << std::showbase << amcHdr.getUserData() << ", "
-        << " L1ID\%107 = " << (amcHdr.getLV1ID()%107)
+        << "L1ID\%107 = " << (amcHdr.getLV1ID()%107) << ", "
+        << "TC\%107 = " << (record.getHeader().getData().header.triggerCount%107) << ", "
+        << "EvID\%107 = " << (iEvent.id().event()%107)
         << std::endl;
 
         anyMPFat |= ( amcHdr.getAMCNumber() < 10 && amcHdr.getUserData() == 0xc0 );
     }
     msg.flags( flgs );
-    msg << "isMPFat " << anyMPFat << " isL1TIDFat " << (header.lvl1ID()%107==0) << std::endl;
+    msg << "isMPFat " << anyMPFat << " isL1TIDFat " << l1IdFat << std::endl;
 
-    bool force = true;
-    if ( anyMPFat || force ) {
+    bool force = false;
+    // if ( anyMPFat || force ) {
+    // if ( anyMPFat && !l1IdFat || force) {
+    // if ( (anyMPFat && !evIdFat) || force)
+    
+    if ( (anyMPFat && !tcFat) || force) {
         LogInfo("L1T") << "New Event";
         std::cout << msg.str();
     }
 
   }
-  // -----------------------------------------------------
-  /*
-  // get towers
-  Handle< BXVector<l1t::CaloTower> > towHandle;
-  iEvent.getByToken(m_towerToken,towHandle);
 
-  std::vector<l1t::CaloTower> towers;
-  
-  for(std::vector<l1t::CaloTower>::const_iterator tower = towHandle->begin(0);
-      tower != towHandle->end(0);
-      ++tower) {
-    towers.push_back(*tower);
-  }
-
-
-  // insert header frames
-  for ( unsigned iFrame=0; iFrame<nHeaderFrames_; ++iFrame ) {
-
-    dataValid_.push_back( 1 );
-
-    // loop over links                                                          
-    for ( unsigned iQuad=0; iQuad<nQuad_; ++iQuad ) {
-      for ( unsigned iChan=0; iChan<nChan_; ++iChan ) {
-
-        int data=0;
-
-        // get tower ieta, iphi for link                                        
-        unsigned iLink = (iQuad*nChan_)+iChan;
-
-        // add data to output                                                   
-        data_.at(iLink).push_back( data );
-
-      }
-
-    }
-
-    nFrame_++;
-
-  }
-
-
-
-  // loop over frames
-  for ( unsigned iFrame=0; iFrame<nPayloadFrames_; ++iFrame ) {
-    
-    dataValid_.push_back( 1 );
-
-    // loop over links
-    for ( unsigned iQuad=0; iQuad<nQuad_; ++iQuad ) {
-      for ( unsigned iChan=0; iChan<nChan_; ++iChan ) {
-
-	int data=0;
-
-        // get tower ieta, iphi for link
-	int iLink = (iQuad*nChan_)+iChan;
-	int ietaSgn = (iLink % 2==0 ? +1 : -1);
-	int ieta = ietaSgn * (iFrame + 1);
-	int iphi = 1+(iLink % 2==0 ? iLink : iLink-1);
-
-	// get tower 1 data
-	l1t::CaloTower tower = l1t::CaloTools::getTower(towers, ieta, iphi);
-	data |= tower.hwPt() & 0x1ff;
-	data |= (tower.hwEtRatio() & 0x7)<<9;
-	data |= (tower.hwQual() & 0xf)<<12;
-
-	// get tower 2
-	iphi = iphi + 1;
-	tower = l1t::CaloTools::getTower(towers, ieta, iphi);
-	data |= (tower.hwPt() & 0x1ff)<<16;
-	data |= (tower.hwEtRatio() & 0x7)<<25;
-	data |= (tower.hwQual() & 0xf)<<28;
-	
-	// add data to output
-	data_.at(iLink).push_back( data );
-
-      }
-
-    }
-
-      nFrame_++;
-
-  }
-
-
-  // loop over clear frames
-  for ( unsigned iFrame=0; iFrame<nClearFrames_; ++iFrame ) {
-    
-    dataValid_.push_back( 0 );
-
-    // loop over links
-    for ( unsigned iQuad=0; iQuad<nQuad_; ++iQuad ) {
-      for ( unsigned iChan=0; iChan<nChan_; ++iChan ) {
-
-	int data=0;
-
-        // get tower ieta, iphi for link
-	unsigned iLink = (iQuad*nChan_)+iChan;
-	
-	// add data to output
-	data_.at(iLink).push_back( data );
-
-      }
-
-    }
-
-      nFrame_++;
-
-  }
-      
-  */
 }
 
 
